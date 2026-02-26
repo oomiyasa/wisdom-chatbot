@@ -199,7 +199,7 @@ async def chat(req: ChatRequest):
 
 Your job is to give practical, specific advice drawn directly from the tactics below.
 - Be concise and direct. Lead with the most actionable insight.
-- Reference specific tactics by number when useful (e.g., "Tactic 3 suggests...").
+- NEVER reference tactic numbers (do not say "Tactic 3" or "Tactic 15" etc.) — just share the advice directly.
 - If the user's question doesn't match any tactics well, say so honestly rather than guessing.
 - Do not invent tactics that aren't in the list.
 - Speak like a trusted senior sales advisor, not a chatbot.
@@ -214,29 +214,14 @@ Your job is to give practical, specific advice drawn directly from the tactics b
     messages = list(req.conversation)
     messages.append({"role": "user", "content": req.message})
 
-    async def stream_response():
-        try:
-            with anthropic_client.messages.stream(
-                model="claude-opus-4-6",
-                max_tokens=1024,
-                system=system_prompt,
-                messages=messages,
-            ) as stream:
-                for text in stream.text_stream:
-                    # SSE format
-                    yield f"data: {json.dumps({'text': text})}\n\n"
-                yield "data: [DONE]\n\n"
-        except Exception as e:
-            yield f"data: {json.dumps({'error': str(e)})}\n\n"
-
-    return StreamingResponse(
-        stream_response(),
-        media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "X-Accel-Buffering": "no",
-        }
+    response = anthropic_client.messages.create(
+        model="claude-opus-4-6",
+        max_tokens=1024,
+        system=system_prompt,
+        messages=messages,
     )
+
+    return {"text": response.content[0].text}
 
 
 # ─── Startup: pre-load data ─────────────────────────────────────────────────
