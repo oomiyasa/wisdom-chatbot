@@ -1,0 +1,255 @@
+<style>
+  #wi-chat-window {
+    position: fixed;
+    bottom: 28px;
+    right: 28px;
+    width: 380px;
+    max-width: calc(100vw - 32px);
+    height: 540px;
+    max-height: calc(100vh - 48px);
+    background: #fff;
+    border-radius: 16px;
+    box-shadow: 0 8px 40px rgba(0,0,0,0.18);
+    display: flex;
+    flex-direction: column;
+    z-index: 9998;
+    overflow: hidden;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-size: 14px;
+    transition: opacity 0.2s, transform 0.2s;
+  }
+  #wi-chat-window.hidden {
+    opacity: 0;
+    pointer-events: none;
+    transform: translateY(12px);
+  }
+  #wi-chat-header {
+    background: #1a1a1a;
+    color: #fff;
+    padding: 16px 18px;
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    flex-shrink: 0;
+  }
+  #wi-chat-header .wi-title {
+    font-weight: 700;
+    font-size: 16px;
+    letter-spacing: -0.01em;
+    margin-bottom: 5px;
+  }
+  #wi-chat-header .wi-subtitle {
+    font-size: 12px;
+    opacity: 0.6;
+    line-height: 1.45;
+    max-width: 260px;
+  }
+  #wi-chat-minimize {
+    background: none;
+    border: none;
+    color: #fff;
+    cursor: pointer;
+    font-size: 22px;
+    opacity: 0.7;
+    padding: 0 4px;
+    line-height: 1;
+    flex-shrink: 0;
+    margin-left: 8px;
+  }
+  #wi-chat-minimize:hover { opacity: 1; }
+  #wi-chat-bubble {
+    position: fixed;
+    bottom: 28px;
+    right: 28px;
+    background: #1a1a1a;
+    color: #fff;
+    border: none;
+    border-radius: 12px;
+    padding: 12px 18px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 600;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.25);
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: opacity 0.15s, transform 0.2s;
+  }
+  #wi-chat-bubble:hover {
+    opacity: 0.85;
+    transform: scale(1.03);
+  }
+  #wi-chat-messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    scroll-behavior: smooth;
+  }
+  .wi-msg {
+    max-width: 85%;
+    padding: 10px 13px;
+    border-radius: 12px;
+    line-height: 1.5;
+    word-wrap: break-word;
+    white-space: pre-wrap;
+  }
+  .wi-msg.user {
+    background: #1a1a1a;
+    color: #fff;
+    align-self: flex-end;
+    border-bottom-right-radius: 3px;
+  }
+  .wi-msg.assistant {
+    background: #f3f4f6;
+    color: #111;
+    align-self: flex-start;
+    border-bottom-left-radius: 3px;
+  }
+  .wi-msg.assistant.typing { color: #888; font-style: italic; }
+  #wi-chat-input-row {
+    display: flex;
+    gap: 8px;
+    padding: 12px 12px 14px;
+    border-top: 1px solid #eee;
+    flex-shrink: 0;
+  }
+  #wi-chat-input {
+    flex: 1;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    padding: 9px 12px;
+    font-size: 14px;
+    outline: none;
+    resize: none;
+    font-family: inherit;
+    line-height: 1.4;
+    height: 38px;
+    max-height: 100px;
+    overflow-y: auto;
+  }
+  #wi-chat-input:focus { border-color: #1a1a1a; }
+  #wi-chat-send {
+    background: #1a1a1a;
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    padding: 0 14px;
+    cursor: pointer;
+    font-size: 16px;
+    flex-shrink: 0;
+  }
+  #wi-chat-send:disabled { opacity: 0.4; cursor: not-allowed; }
+  #wi-chat-send:not(:disabled):hover { opacity: 0.85; }
+</style>
+
+<!-- Minimized bubble (visible by default) -->
+<button id="wi-chat-bubble">
+  💬 Try the Wisdom Chatbot!
+</button>
+
+<!-- Chat window (hidden by default) -->
+<div id="wi-chat-window" class="hidden">
+  <div id="wi-chat-header">
+    <div>
+      <div class="wi-title">Wisdom Index Chatbot</div>
+      <div class="wi-subtitle">Over 10,000 bits of wisdom collected from sales, consulting, and services professionals</div>
+    </div>
+    <button id="wi-chat-minimize">−</button>
+  </div>
+  <div id="wi-chat-messages">
+    <div class="wi-msg assistant">👋 Hi! Ask me anything about sales tactics — discovery, objection handling, pricing, forecasting, and more.</div>
+  </div>
+  <div id="wi-chat-input-row">
+    <textarea id="wi-chat-input" placeholder="Ask a sales question..." rows="1"></textarea>
+    <button id="wi-chat-send">↑</button>
+  </div>
+</div>
+
+<script>
+(function() {
+  const API_URL = "https://wisdom-chatbot.onrender.com/chat";
+  const win = document.getElementById("wi-chat-window");
+  const bubble = document.getElementById("wi-chat-bubble");
+  const minimizeBtn = document.getElementById("wi-chat-minimize");
+  const messages = document.getElementById("wi-chat-messages");
+  const input = document.getElementById("wi-chat-input");
+  const send = document.getElementById("wi-chat-send");
+  let conversation = [];
+  let isLoading = false;
+
+  bubble.addEventListener("click", () => {
+    win.classList.remove("hidden");
+    bubble.style.display = "none";
+    input.focus();
+  });
+
+  minimizeBtn.addEventListener("click", () => {
+    win.classList.add("hidden");
+    bubble.style.display = "flex";
+  });
+
+  input.addEventListener("input", () => {
+    input.style.height = "38px";
+    input.style.height = Math.min(input.scrollHeight, 100) + "px";
+  });
+
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      if (!isLoading) sendMessage();
+    }
+  });
+
+  send.addEventListener("click", () => { if (!isLoading) sendMessage(); });
+
+  function appendMessage(role, text, isTyping = false) {
+    const div = document.createElement("div");
+    div.className = "wi-msg " + role + (isTyping ? " typing" : "");
+    div.textContent = text;
+    messages.appendChild(div);
+    messages.scrollTop = messages.scrollHeight;
+    return div;
+  }
+
+  async function sendMessage() {
+    const text = input.value.trim();
+    if (!text) return;
+    input.value = "";
+    input.style.height = "38px";
+    isLoading = true;
+    send.disabled = true;
+    appendMessage("user", text);
+    conversation.push({ role: "user", content: text });
+    const assistantDiv = appendMessage("assistant", "Thinking…", true);
+    try {
+      const response = await fetch(API_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          message: text,
+          conversation: conversation.slice(0, -1)
+        }),
+      });
+      if (!response.ok) throw new Error("HTTP " + response.status);
+      const data = await response.json();
+      assistantDiv.classList.remove("typing");
+      assistantDiv.textContent = data.text;
+      messages.scrollTop = messages.scrollHeight;
+      conversation.push({ role: "assistant", content: data.text });
+    } catch(err) {
+      assistantDiv.className = "wi-msg assistant";
+      assistantDiv.textContent = "⚠️ Something went wrong. Please try again.";
+      conversation.pop();
+    } finally {
+      isLoading = false;
+      send.disabled = false;
+      input.focus();
+    }
+  }
+})();
+</script>
